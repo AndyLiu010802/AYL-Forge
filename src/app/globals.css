@@ -1,0 +1,15 @@
+html,
+body {
+  width: 100%;
+  min-height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: #05080d;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
