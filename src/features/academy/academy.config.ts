@@ -1,66 +1,8 @@
-import type { LearningCourse, ShopItem } from "./academy.types";
+import type { ShopItem } from "./academy.types";
 
-const prismCourseUrl =
-  process.env.NEXT_PUBLIC_PRISM_DASH_COURSE_URL ??
-  "https://andy-prism-portfolio.netlify.app/build-guide/";
-
-/** Adding another project course only requires another registry record. */
-export const LEARNING_COURSES = [
-  {
-    id: "prism-dash",
-    title: { zh: "Prism Dash 棱镜作品集", en: "Prism Dash Portfolio" },
-    eyebrow: { zh: "完整项目课程 / 18 关", en: "FULL PROJECT COURSE / 18 LEVELS" },
-    description: {
-      zh: "从空项目开始，逐关完成界面、状态机、第一人称 3D、棱镜特效、性能优化与静态发布。",
-      en: "Build a complete first-person prism portfolio: interface, state machine, 3D, effects, performance and launch.",
-    },
-    category: { zh: "创意前端", en: "Creative Frontend" },
-    difficulty: { zh: "零基础至进阶", en: "Beginner to Advanced" },
-    estimatedHours: 14,
-    totalLessons: 18,
-    status: "available",
-    launchUrl: prismCourseUrl,
-    accent: "#7de6da",
-    accentSecondary: "#c49bff",
-    glyph: "PD",
-  },
-  {
-    id: "motion-systems",
-    title: { zh: "Motion Systems 动效系统", en: "Motion Systems" },
-    eyebrow: { zh: "下一项目 / 规划中", en: "NEXT PROJECT / PLANNED" },
-    description: {
-      zh: "把交互动效拆成时间线、状态和可复用节拍的专项项目。",
-      en: "A focused project for reusable timelines, interaction states and motion rhythm.",
-    },
-    category: { zh: "交互动效", en: "Interaction Motion" },
-    difficulty: { zh: "中级", en: "Intermediate" },
-    estimatedHours: 8,
-    totalLessons: 12,
-    status: "coming-soon",
-    launchUrl: "",
-    accent: "#d7f57c",
-    accentSecondary: "#78baff",
-    glyph: "MS",
-  },
-  {
-    id: "shader-foundry",
-    title: { zh: "Shader Foundry 着色器工坊", en: "Shader Foundry" },
-    eyebrow: { zh: "未来项目 / 规划中", en: "FUTURE PROJECT / PLANNED" },
-    description: {
-      zh: "从 UV、uniform 到完整棱镜材质，建立可观察的 GPU 学习实验室。",
-      en: "A visible GPU laboratory from UVs and uniforms to a complete prism material.",
-    },
-    category: { zh: "实时图形", en: "Real-time Graphics" },
-    difficulty: { zh: "进阶", en: "Advanced" },
-    estimatedHours: 10,
-    totalLessons: 14,
-    status: "coming-soon",
-    launchUrl: "",
-    accent: "#ff9bd5",
-    accentSecondary: "#866dff",
-    glyph: "SF",
-  },
-] as const satisfies readonly LearningCourse[];
+// Course manifests live beside their validation contract; this re-export keeps
+// existing academy consumers independent from the registry's file structure.
+export { LEARNING_COURSES } from "./courses/courseRegistry";
 
 export const SHOP_ITEMS = [
   {

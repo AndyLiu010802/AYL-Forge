@@ -1,5 +1,8 @@
 export type AcademyLocale = "zh" | "en";
+export const COURSE_PROTOCOL_VERSION = 2 as const;
+export type CourseProtocolVersion = typeof COURSE_PROTOCOL_VERSION;
 export type CourseStatus = "available" | "coming-soon";
+export type CourseLayoutHint = "hero" | "standard" | "compact";
 export type ShopItemKind = "profile-frame" | "trail" | "title" | "theme";
 
 export interface LocalizedText {
@@ -7,8 +10,12 @@ export interface LocalizedText {
   readonly en: string;
 }
 
+export type LocalizedCourseUrls = Readonly<Record<AcademyLocale, string>>;
+
 export interface LearningCourse {
   readonly id: string;
+  /** Version of the cross-origin progress contract implemented by the course. */
+  readonly protocolVersion: CourseProtocolVersion;
   readonly title: LocalizedText;
   readonly eyebrow: LocalizedText;
   readonly description: LocalizedText;
@@ -17,7 +24,16 @@ export interface LearningCourse {
   readonly estimatedHours: number;
   readonly totalLessons: number;
   readonly status: CourseStatus;
-  readonly launchUrl: string;
+  /** Explicit entry point for every language; available courses must provide both. */
+  readonly launchUrls: LocalizedCourseUrls;
+  /** Exact origins allowed to send progress messages from the active course iframe. */
+  readonly allowedOrigins: readonly string[];
+  /** Upper bound accepted from an untrusted course progress message. */
+  readonly maxXp: number;
+  /** Course-owned reward identifiers accepted by the platform bridge. */
+  readonly allowedRewardIds: readonly string[];
+  readonly featured: boolean;
+  readonly layoutHint: CourseLayoutHint;
   readonly accent: string;
   readonly accentSecondary: string;
   readonly glyph: string;
@@ -52,9 +68,16 @@ export interface AcademyProgress {
 export interface CourseProgressMessage {
   readonly type: "AYL_FORGE_COURSE_PROGRESS";
   readonly courseId: string;
+  readonly protocolVersion: CourseProtocolVersion;
   readonly progress: {
     readonly completed: readonly number[];
     readonly xp: number;
     readonly rewards: readonly string[];
   };
+}
+
+export interface CourseProgressRequest {
+  readonly type: "AYL_FORGE_REQUEST_PROGRESS";
+  readonly courseId: string;
+  readonly protocolVersion: CourseProtocolVersion;
 }

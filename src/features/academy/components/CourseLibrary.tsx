@@ -44,10 +44,15 @@ export function CourseLibrary({ courses, locale, progress, onLaunch }: CourseLib
             const record = progress.courses[course.id];
             const completed = record?.completed.length ?? 0;
             const percentage = Math.round((completed / course.totalLessons) * 100);
+            const layoutClass = {
+              hero: styles.courseHero,
+              standard: styles.courseStandard,
+              compact: styles.courseCompact,
+            }[course.layoutHint];
             return (
               <article
                 key={course.id}
-                className={`${styles.courseCard} ${course.status === "coming-soon" ? styles.courseLocked : ""}`}
+                className={`${styles.courseCard} ${layoutClass} ${course.status === "coming-soon" ? styles.courseLocked : ""}`}
                 style={{ "--course-accent": course.accent, "--course-accent-2": course.accentSecondary } as React.CSSProperties}
               >
                 <div className={styles.courseVisual}><span>{course.glyph}</span><i /><b>{String(index + 1).padStart(2, "0")}</b></div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef } from "react";
-import { isCourseProgressMessage } from "../academy.progress";
+import { acceptCourseProgressEvent, courseProgressRequest } from "../courseBridge";
 import type { AcademyLocale, CourseProgressMessage, LearningCourse } from "../academy.types";
 import styles from "../styles/Academy.module.css";
 
@@ -13,30 +13,27 @@ interface CoursePlayerProps {
 }
 
 function localizedCourseUrl(course: LearningCourse, locale: AcademyLocale): string {
-  const url = new URL(course.launchUrl);
-  if (locale === "en") url.pathname = `${url.pathname.replace(/\/$/, "")}/en`;
-  return url.toString();
+  return course.launchUrls[locale];
 }
 
 /** Secure iframe bridge for a course hosted on a separate origin. */
 export function CoursePlayer({ course, locale, onClose, onProgress }: CoursePlayerProps) {
   const frameRef = useRef<HTMLIFrameElement>(null);
   const source = useMemo(() => localizedCourseUrl(course, locale), [course, locale]);
-  const allowedOrigin = useMemo(() => new URL(course.launchUrl).origin, [course.launchUrl]);
+  const allowedOrigin = useMemo(() => new URL(source).origin, [source]);
 
   useEffect(() => {
     const receiveProgress = (event: MessageEvent<unknown>) => {
-      if (event.origin !== allowedOrigin || event.source !== frameRef.current?.contentWindow) return;
-      if (!isCourseProgressMessage(event.data) || event.data.courseId !== course.id) return;
-      onProgress(event.data);
+      const accepted = acceptCourseProgressEvent(event, frameRef.current?.contentWindow ?? null, course);
+      if (accepted) onProgress(accepted);
     };
     window.addEventListener("message", receiveProgress);
     return () => window.removeEventListener("message", receiveProgress);
-  }, [allowedOrigin, course.id, onProgress]);
+  }, [course, onProgress]);
 
   const requestProgress = () => {
     frameRef.current?.contentWindow?.postMessage(
-      { type: "AYL_FORGE_REQUEST_PROGRESS", courseId: course.id },
+      courseProgressRequest(course),
       allowedOrigin,
     );
   };

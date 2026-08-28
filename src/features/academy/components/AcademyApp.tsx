@@ -35,7 +35,7 @@ export function AcademyApp() {
   const receiveCourseProgress = useCallback((message: CourseProgressMessage) => {
     const course = LEARNING_COURSES.find((candidate) => candidate.id === message.courseId);
     if (!course) return;
-    commit((current) => syncCourseProgress(current, message, course.totalLessons));
+    commit((current) => syncCourseProgress(current, message, course));
   }, [commit]);
 
   const buyItem = (item: ShopItem) => {

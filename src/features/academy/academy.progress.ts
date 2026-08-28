@@ -3,6 +3,7 @@ import type {
   AcademyProgress,
   CourseProgressMessage,
   CourseRecord,
+  LearningCourse,
   ShopItem,
   ShopItemKind,
 } from "./academy.types";
@@ -85,27 +86,42 @@ export function nextRankForXp(xp: number) {
 export function syncCourseProgress(
   current: AcademyProgress,
   message: CourseProgressMessage,
-  totalLessons: number,
+  course: Pick<
+    LearningCourse,
+    "id" | "protocolVersion" | "totalLessons" | "maxXp" | "allowedRewardIds"
+  >,
   now = new Date().toISOString(),
 ): AcademyProgress {
+  if (message.courseId !== course.id || message.protocolVersion !== course.protocolVersion) return current;
   const previous = current.courses[message.courseId];
-  const incomingXp = Number.isFinite(message.progress.xp) ? Math.max(0, message.progress.xp) : 0;
-  const acceptedXp = Math.max(previous?.xp ?? 0, incomingXp);
-  const xpGain = acceptedXp - (previous?.xp ?? 0);
+  const previousXp = Math.min(
+    course.maxXp,
+    Math.max(0, Math.floor(previous?.xp ?? 0)),
+  );
+  const incomingXp = Number.isFinite(message.progress.xp)
+    ? Math.min(course.maxXp, Math.max(0, Math.floor(message.progress.xp)))
+    : 0;
+  const acceptedXp = Math.max(previousXp, incomingXp);
+  const previousCrystalMilestone = Math.floor(previousXp / 5);
+  const nextCrystalMilestone = Math.floor(acceptedXp / 5);
+  const allowedRewards = new Set(course.allowedRewardIds);
   const nextRecord: CourseRecord = {
     xp: acceptedXp,
     completed: uniqueIntegers(
       [...(previous?.completed ?? []), ...message.progress.completed],
-      totalLessons,
+      course.totalLessons,
     ),
-    rewards: uniqueStrings([...(previous?.rewards ?? []), ...message.progress.rewards]),
-    totalLessons,
+    rewards: uniqueStrings(
+      [...(previous?.rewards ?? []), ...message.progress.rewards]
+        .filter((reward) => allowedRewards.has(reward)),
+    ),
+    totalLessons: course.totalLessons,
     lastSyncedAt: now,
   };
   return {
     ...current,
     courses: { ...current.courses, [message.courseId]: nextRecord },
-    crystals: current.crystals + Math.floor(xpGain / 5),
+    crystals: current.crystals + Math.max(0, nextCrystalMilestone - previousCrystalMilestone),
   };
 }
 
@@ -130,19 +146,4 @@ export function purchaseShopItem(current: AcademyProgress, item: ShopItem): Purc
 export function equipShopItem(current: AcademyProgress, item: ShopItem): AcademyProgress {
   if (!current.inventory.includes(item.id)) return current;
   return { ...current, equipped: { ...current.equipped, [item.kind]: item.id } };
-}
-
-export function isCourseProgressMessage(value: unknown): value is CourseProgressMessage {
-  if (!value || typeof value !== "object") return false;
-  const message = value as Partial<CourseProgressMessage>;
-  if (message.type !== "AYL_FORGE_COURSE_PROGRESS" || typeof message.courseId !== "string") return false;
-  const progress = message.progress;
-  return Boolean(
-    progress &&
-    typeof progress === "object" &&
-    typeof progress.xp === "number" &&
-    Number.isFinite(progress.xp) &&
-    Array.isArray(progress.completed) &&
-    Array.isArray(progress.rewards),
-  );
 }

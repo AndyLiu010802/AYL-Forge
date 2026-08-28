@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SHOP_ITEMS } from "./academy.config";
+import { LEARNING_COURSES, SHOP_ITEMS } from "./academy.config";
 import {
   EMPTY_ACADEMY_PROGRESS,
   equipShopItem,
@@ -11,6 +11,8 @@ import {
 } from "./academy.progress";
 
 describe("AYL Forge progression", () => {
+  const prismCourse = LEARNING_COURSES[0];
+
   it("recovers from malformed local data", () => {
     expect(parseAcademyProgress(null)).toEqual(EMPTY_ACADEMY_PROGRESS);
     expect(parseAcademyProgress("broken")).toEqual(EMPTY_ACADEMY_PROGRESS);
@@ -20,10 +22,11 @@ describe("AYL Forge progression", () => {
     const message = {
       type: "AYL_FORGE_COURSE_PROGRESS" as const,
       courseId: "prism-dash",
-      progress: { completed: [0, 1], xp: 200, rewards: ["A", "B"] },
+      protocolVersion: 2 as const,
+      progress: { completed: [0, 1], xp: 200, rewards: [prismCourse.allowedRewardIds[0]] },
     };
-    const first = syncCourseProgress(EMPTY_ACADEMY_PROGRESS, message, 18, "2026-01-01T00:00:00.000Z");
-    const repeated = syncCourseProgress(first, message, 18, "2026-01-02T00:00:00.000Z");
+    const first = syncCourseProgress(EMPTY_ACADEMY_PROGRESS, message, prismCourse, "2026-01-01T00:00:00.000Z");
+    const repeated = syncCourseProgress(first, message, prismCourse, "2026-01-02T00:00:00.000Z");
     expect(first.crystals).toBe(40);
     expect(repeated.crystals).toBe(40);
     expect(totalAcademyXp(repeated)).toBe(200);
@@ -36,15 +39,53 @@ describe("AYL Forge progression", () => {
       {
         type: "AYL_FORGE_COURSE_PROGRESS",
         courseId: "prism-dash",
+        protocolVersion: 2,
         progress: { completed: [-1, 0, 17, 18, 99], xp: Number.NaN, rewards: [] },
       },
-      18,
+      prismCourse,
       "2026-01-01T00:00:00.000Z",
     );
 
     expect(next.courses["prism-dash"].xp).toBe(0);
     expect(next.courses["prism-dash"].completed).toEqual([0, 17]);
     expect(next.crystals).toBe(0);
+  });
+
+  it("awards the same crystals for fragmented and single XP syncs", () => {
+    const baseMessage = {
+      type: "AYL_FORGE_COURSE_PROGRESS" as const,
+      courseId: prismCourse.id,
+      protocolVersion: 2 as const,
+      progress: { completed: [] as number[], xp: 2, rewards: [] as string[] },
+    };
+    const first = syncCourseProgress(EMPTY_ACADEMY_PROGRESS, baseMessage, prismCourse);
+    const fragmented = syncCourseProgress(first, {
+      ...baseMessage,
+      progress: { ...baseMessage.progress, xp: 7 },
+    }, prismCourse);
+    const single = syncCourseProgress(EMPTY_ACADEMY_PROGRESS, {
+      ...baseMessage,
+      progress: { ...baseMessage.progress, xp: 7 },
+    }, prismCourse);
+
+    expect(fragmented.crystals).toBe(1);
+    expect(fragmented.crystals).toBe(single.crystals);
+  });
+
+  it("enforces the course XP cap and reward allowlist", () => {
+    const next = syncCourseProgress(EMPTY_ACADEMY_PROGRESS, {
+      type: "AYL_FORGE_COURSE_PROGRESS",
+      courseId: prismCourse.id,
+      protocolVersion: 2,
+      progress: {
+        completed: [0],
+        xp: prismCourse.maxXp * 10,
+        rewards: [prismCourse.allowedRewardIds[0], "forged-reward"],
+      },
+    }, prismCourse);
+
+    expect(next.courses[prismCourse.id].xp).toBe(prismCourse.maxXp);
+    expect(next.courses[prismCourse.id].rewards).toEqual([prismCourse.allowedRewardIds[0]]);
   });
 
   it("gates purchases by rank and funds, then allows equipping owned items", () => {
