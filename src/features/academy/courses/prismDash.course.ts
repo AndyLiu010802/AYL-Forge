@@ -1,30 +1,11 @@
 import { COURSE_PROTOCOL_VERSION, type LearningCourse } from "../academy.types";
+import { resolvePrismCourseUrls } from "./prismCourseUrls";
 
-const DEFAULT_PRISM_ZH_URL = "https://andy-prism-portfolio.netlify.app/build-guide/";
-const DEFAULT_PRISM_EN_URL = "https://andy-prism-portfolio.netlify.app/build-guide/en/";
-
-function englishUrlFrom(chineseUrl: string): string {
-  const url = new URL(chineseUrl);
-  url.pathname = `${url.pathname.replace(/\/*$/, "")}/en/`;
-  url.search = "";
-  url.hash = "";
-  return url.toString();
-}
-
-const legacyPrismUrl = process.env.NEXT_PUBLIC_PRISM_DASH_COURSE_URL;
-const prismZhUrl =
-  process.env.NEXT_PUBLIC_PRISM_DASH_COURSE_ZH_URL
-  ?? legacyPrismUrl
-  ?? DEFAULT_PRISM_ZH_URL;
-const prismEnUrl =
-  process.env.NEXT_PUBLIC_PRISM_DASH_COURSE_EN_URL
-  ?? (legacyPrismUrl || process.env.NEXT_PUBLIC_PRISM_DASH_COURSE_ZH_URL
-    ? englishUrlFrom(prismZhUrl)
-    : DEFAULT_PRISM_EN_URL);
-
-const prismOrigins = Array.from(
-  new Set([new URL(prismZhUrl).origin, new URL(prismEnUrl).origin]),
-);
+const prismCourseUrls = resolvePrismCourseUrls({
+  legacy: process.env.NEXT_PUBLIC_PRISM_DASH_COURSE_URL,
+  zh: process.env.NEXT_PUBLIC_PRISM_DASH_COURSE_ZH_URL,
+  en: process.env.NEXT_PUBLIC_PRISM_DASH_COURSE_EN_URL,
+});
 
 /**
  * Prism currently stores the localized badge labels in its progress payload.
@@ -84,8 +65,8 @@ export const PRISM_DASH_COURSE = {
   estimatedHours: 14,
   totalLessons: 18,
   status: "available",
-  launchUrls: { zh: prismZhUrl, en: prismEnUrl },
-  allowedOrigins: prismOrigins,
+  launchUrls: prismCourseUrls.launchUrls,
+  allowedOrigins: prismCourseUrls.allowedOrigins,
   maxXp: 1800,
   allowedRewardIds: PRISM_DASH_REWARD_IDS,
   featured: true,
