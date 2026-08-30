@@ -44,6 +44,9 @@ export function CourseLibrary({ courses, locale, progress, onLaunch }: CourseLib
             const record = progress.courses[course.id];
             const completed = record?.completed.length ?? 0;
             const percentage = Math.round((completed / course.totalLessons) * 100);
+            const pendingRewards = progress.pendingDrops.filter(
+              (drop) => drop.courseId === course.id,
+            ).length;
             const layoutClass = {
               hero: styles.courseHero,
               standard: styles.courseStandard,
@@ -61,9 +64,24 @@ export function CourseLibrary({ courses, locale, progress, onLaunch }: CourseLib
                   <dl><div><dt>{locale === "zh" ? "领域" : "FIELD"}</dt><dd>{course.category[locale]}</dd></div><div><dt>{locale === "zh" ? "难度" : "LEVEL"}</dt><dd>{course.difficulty[locale]}</dd></div><div><dt>{locale === "zh" ? "预计" : "TIME"}</dt><dd>{course.estimatedHours}H</dd></div></dl>
                 </div>
                 <footer>
-                  <div><span>{completed} / {course.totalLessons}</span><i><b style={{ width: `${percentage}%` }} /></i></div>
+                  <div>
+                    <span>{completed} / {course.totalLessons}</span>
+                    {pendingRewards ? (
+                      <small className={styles.pendingReward}>
+                        ◆ {pendingRewards} {locale === "zh" ? "个结算待领取" : "reward drop pending"}
+                      </small>
+                    ) : null}
+                    <i><b style={{ width: `${percentage}%` }} /></i>
+                  </div>
                   {course.status === "available" ? (
-                    <button type="button" onClick={() => onLaunch(course)}>{completed ? (locale === "zh" ? "继续项目" : "Continue") : (locale === "zh" ? "开始项目" : "Start project")} <span>→</span></button>
+                    <button type="button" onClick={() => onLaunch(course)}>
+                      {pendingRewards
+                        ? (locale === "zh" ? "领取结算" : "Claim reward")
+                        : completed
+                          ? (locale === "zh" ? "继续项目" : "Continue")
+                          : (locale === "zh" ? "开始项目" : "Start project")}
+                      <span>→</span>
+                    </button>
                   ) : <span>{locale === "zh" ? "开发中" : "IN DEVELOPMENT"}</span>}
                 </footer>
               </article>

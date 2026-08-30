@@ -2,14 +2,24 @@
 
 import { useEffect, useMemo, useRef } from "react";
 import { acceptCourseProgressEvent, courseProgressRequest } from "../courseBridge";
-import type { AcademyLocale, CourseProgressMessage, LearningCourse } from "../academy.types";
+import type {
+  AcademyLocale,
+  CourseProgressMessage,
+  LearningCourse,
+  PendingRewardDrop,
+} from "../academy.types";
+import { RewardDropOverlay } from "./RewardDropOverlay";
 import styles from "../styles/Academy.module.css";
 
 interface CoursePlayerProps {
   readonly course: LearningCourse;
   readonly locale: AcademyLocale;
+  readonly rewardDrop: PendingRewardDrop | null;
   readonly onClose: () => void;
   readonly onProgress: (message: CourseProgressMessage) => void;
+  readonly onContinueReward: (dropId: string) => void;
+  readonly onOpenShop: (dropId: string) => void;
+  readonly onOpenProfile: (dropId: string) => void;
 }
 
 function localizedCourseUrl(course: LearningCourse, locale: AcademyLocale): string {
@@ -17,7 +27,16 @@ function localizedCourseUrl(course: LearningCourse, locale: AcademyLocale): stri
 }
 
 /** Secure iframe bridge for a course hosted on a separate origin. */
-export function CoursePlayer({ course, locale, onClose, onProgress }: CoursePlayerProps) {
+export function CoursePlayer({
+  course,
+  locale,
+  rewardDrop,
+  onClose,
+  onProgress,
+  onContinueReward,
+  onOpenShop,
+  onOpenProfile,
+}: CoursePlayerProps) {
   const frameRef = useRef<HTMLIFrameElement>(null);
   const source = useMemo(() => localizedCourseUrl(course, locale), [course, locale]);
   const allowedOrigin = useMemo(() => new URL(source).origin, [source]);
@@ -57,6 +76,17 @@ export function CoursePlayer({ course, locale, onClose, onProgress }: CoursePlay
           sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
         />
       </div>
+      {rewardDrop ? (
+        <RewardDropOverlay
+          key={rewardDrop.id}
+          drop={rewardDrop}
+          course={course}
+          locale={locale}
+          onContinue={() => onContinueReward(rewardDrop.id)}
+          onOpenShop={() => onOpenShop(rewardDrop.id)}
+          onOpenProfile={() => onOpenProfile(rewardDrop.id)}
+        />
+      ) : null}
     </section>
   );
 }

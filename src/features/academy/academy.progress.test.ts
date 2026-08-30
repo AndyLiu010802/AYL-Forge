@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { LEARNING_COURSES, SHOP_ITEMS } from "./academy.config";
 import {
   EMPTY_ACADEMY_PROGRESS,
+  acknowledgeRewardDrop,
   equipShopItem,
   parseAcademyProgress,
   purchaseShopItem,
@@ -18,6 +19,59 @@ describe("AYL Forge progression", () => {
     expect(parseAcademyProgress("broken")).toEqual(EMPTY_ACADEMY_PROGRESS);
   });
 
+  it("loads a legacy save without a settlement queue", () => {
+    const legacy = JSON.stringify({
+      courses: {
+        "prism-dash": {
+          xp: 25,
+          completed: [0],
+          rewards: [],
+          totalLessons: 18,
+          lastSyncedAt: "2026-01-01T00:00:00.000Z",
+        },
+      },
+      crystals: 5,
+      inventory: [],
+      equipped: {},
+    });
+
+    expect(parseAcademyProgress(legacy)).toMatchObject({
+      pendingDrops: [],
+      crystals: 5,
+      courses: { "prism-dash": { xp: 25 } },
+    });
+  });
+
+  it("strictly cleans malformed and duplicate persisted drops", () => {
+    const validDrop = {
+      id: "drop-01",
+      courseId: "prism-dash",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      newLessons: [2, 1, 2, -1, 1.5],
+      xpEarned: 20,
+      crystalsEarned: 4,
+      rewardIds: [" badge-01 ", "badge-01", ""],
+      rankBefore: 1,
+      rankAfter: 2,
+    };
+    const parsed = parseAcademyProgress(JSON.stringify({
+      ...EMPTY_ACADEMY_PROGRESS,
+      pendingDrops: [
+        validDrop,
+        validDrop,
+        { ...validDrop, id: "drop-invalid-time", createdAt: "yesterday" },
+        { ...validDrop, id: "drop-empty", newLessons: [], xpEarned: 0, crystalsEarned: 0, rewardIds: [] },
+        { ...validDrop, id: "drop-rank-regression", rankBefore: 3, rankAfter: 2 },
+      ],
+    }));
+
+    expect(parsed.pendingDrops).toEqual([{
+      ...validDrop,
+      newLessons: [1, 2],
+      rewardIds: ["badge-01"],
+    }]);
+  });
+
   it("syncs course XP idempotently and grants crystals only for new XP", () => {
     const message = {
       type: "AYL_FORGE_COURSE_PROGRESS" as const,
@@ -31,6 +85,122 @@ describe("AYL Forge progression", () => {
     expect(repeated.crystals).toBe(40);
     expect(totalAcademyXp(repeated)).toBe(200);
     expect(repeated.courses["prism-dash"].completed).toEqual([0, 1]);
+    expect(first.pendingDrops).toHaveLength(1);
+    expect(repeated.pendingDrops).toEqual(first.pendingDrops);
+  });
+
+  it("settles the exact cumulative delta into assets and one reward drop", () => {
+    const firstReward = prismCourse.allowedRewardIds[0];
+    const secondReward = prismCourse.allowedRewardIds[1];
+    const current = {
+      ...EMPTY_ACADEMY_PROGRESS,
+      crystals: 10,
+      courses: {
+        [prismCourse.id]: {
+          xp: 4,
+          completed: [0],
+          rewards: [firstReward],
+          totalLessons: prismCourse.totalLessons,
+          lastSyncedAt: "2026-01-01T00:00:00.000Z",
+        },
+      },
+    };
+
+    const next = syncCourseProgress(current, {
+      type: "AYL_FORGE_COURSE_PROGRESS",
+      courseId: prismCourse.id,
+      protocolVersion: 2,
+      progress: {
+        completed: [0, 1, 2],
+        xp: 12,
+        rewards: [firstReward, secondReward],
+      },
+    }, prismCourse, "2026-01-02T00:00:00.000Z");
+
+    expect(next.crystals).toBe(12);
+    expect(next.courses[prismCourse.id]).toMatchObject({
+      xp: 12,
+      completed: [0, 1, 2],
+      rewards: [firstReward, secondReward],
+    });
+    expect(next.pendingDrops).toHaveLength(1);
+    expect(next.pendingDrops[0]).toMatchObject({
+      courseId: prismCourse.id,
+      createdAt: "2026-01-02T00:00:00.000Z",
+      newLessons: [1, 2],
+      xpEarned: 8,
+      crystalsEarned: 2,
+      rewardIds: [secondReward],
+      rankBefore: 1,
+      rankAfter: 1,
+    });
+  });
+
+  it("queues consecutive settlements in order with unique deterministic IDs", () => {
+    const message = (xp: number, completed: number[]) => ({
+      type: "AYL_FORGE_COURSE_PROGRESS" as const,
+      courseId: prismCourse.id,
+      protocolVersion: 2 as const,
+      progress: { completed, xp, rewards: [] as string[] },
+    });
+    const first = syncCourseProgress(
+      EMPTY_ACADEMY_PROGRESS,
+      message(5, [0]),
+      prismCourse,
+      "2026-01-01T00:00:00.000Z",
+    );
+    const second = syncCourseProgress(
+      first,
+      message(10, [0, 1]),
+      prismCourse,
+      "2026-01-02T00:00:00.000Z",
+    );
+
+    expect(second.pendingDrops).toHaveLength(2);
+    expect(second.pendingDrops.map((drop) => drop.createdAt)).toEqual([
+      "2026-01-01T00:00:00.000Z",
+      "2026-01-02T00:00:00.000Z",
+    ]);
+    expect(new Set(second.pendingDrops.map((drop) => drop.id)).size).toBe(2);
+    expect(syncCourseProgress(
+      EMPTY_ACADEMY_PROGRESS,
+      message(5, [0]),
+      prismCourse,
+      "2030-01-01T00:00:00.000Z",
+    ).pendingDrops[0].id).toBe(first.pendingDrops[0].id);
+  });
+
+  it("acknowledges a drop without changing earned progress or assets", () => {
+    const settled = syncCourseProgress(EMPTY_ACADEMY_PROGRESS, {
+      type: "AYL_FORGE_COURSE_PROGRESS",
+      courseId: prismCourse.id,
+      protocolVersion: 2,
+      progress: { completed: [0], xp: 5, rewards: [] },
+    }, prismCourse, "2026-01-01T00:00:00.000Z");
+    const acknowledged = acknowledgeRewardDrop(settled, settled.pendingDrops[0].id);
+
+    expect(acknowledged.pendingDrops).toEqual([]);
+    expect(acknowledged.courses).toEqual(settled.courses);
+    expect(acknowledged.crystals).toBe(settled.crystals);
+    expect(acknowledged.inventory).toEqual(settled.inventory);
+    expect(acknowledged.equipped).toEqual(settled.equipped);
+    expect(acknowledgeRewardDrop(acknowledged, "missing")).toBe(acknowledged);
+  });
+
+  it("records a rank transition against academy-wide XP", () => {
+    const next = syncCourseProgress(EMPTY_ACADEMY_PROGRESS, {
+      type: "AYL_FORGE_COURSE_PROGRESS",
+      courseId: prismCourse.id,
+      protocolVersion: 2,
+      progress: { completed: [0, 1], xp: 150, rewards: [] },
+    }, prismCourse, "2026-01-01T00:00:00.000Z");
+
+    expect(next.pendingDrops[0]).toMatchObject({
+      xpEarned: 150,
+      crystalsEarned: 30,
+      rankBefore: 1,
+      rankAfter: 2,
+    });
   });
 
   it("rejects invalid XP and clamps completed lesson indexes", () => {

@@ -2,7 +2,12 @@
 
 import { useCallback, useState, useSyncExternalStore } from "react";
 import { LEARNING_COURSES, SHOP_ITEMS } from "../academy.config";
-import { equipShopItem, purchaseShopItem, syncCourseProgress } from "../academy.progress";
+import {
+  acknowledgeRewardDrop,
+  equipShopItem,
+  purchaseShopItem,
+  syncCourseProgress,
+} from "../academy.progress";
 import type { AcademyLocale, CourseProgressMessage, LearningCourse, ShopItem } from "../academy.types";
 import { useAcademyProgress } from "../useAcademyProgress";
 import { CourseLibrary } from "./CourseLibrary";
@@ -39,26 +44,58 @@ export function AcademyApp() {
   }, [commit]);
 
   const buyItem = (item: ShopItem) => {
-    const result = purchaseShopItem(progress, item);
-    if (result.ok) {
-      commit(result.progress);
-      setFeedback(locale === "zh" ? `已兑换：${item.name.zh}` : `Purchased: ${item.name.en}`);
-      return;
-    }
-    const reason = {
-      owned: locale === "zh" ? "你已经拥有这个奖励。" : "You already own this reward.",
-      level: locale === "zh" ? "等级还没有达到解锁要求。" : "Your rank is not high enough yet.",
-      funds: locale === "zh" ? "晶体不足，继续完成课程宝箱。" : "Not enough crystals. Complete more course chests.",
-    }[result.reason];
-    setFeedback(reason);
+    let nextFeedback = "";
+    commit((current) => {
+      const result = purchaseShopItem(current, item);
+      if (result.ok) {
+        nextFeedback = locale === "zh"
+          ? `已兑换：${item.name.zh}`
+          : `Purchased: ${item.name.en}`;
+        return result.progress;
+      }
+      nextFeedback = {
+        owned: locale === "zh" ? "你已经拥有这个奖励。" : "You already own this reward.",
+        level: locale === "zh" ? "等级还没有达到解锁要求。" : "Your rank is not high enough yet.",
+        funds: locale === "zh" ? "晶体不足，继续完成课程宝箱。" : "Not enough crystals. Complete more course chests.",
+      }[result.reason];
+      return current;
+    });
+    setFeedback(nextFeedback);
   };
 
   const equipItem = (item: ShopItem) => {
-    commit(equipShopItem(progress, item));
+    commit((current) => equipShopItem(current, item));
     setFeedback(locale === "zh" ? `已装备：${item.name.zh}` : `Equipped: ${item.name.en}`);
   };
 
-  if (activeCourse) return <CoursePlayer course={activeCourse} locale={locale} onClose={() => setActiveCourse(null)} onProgress={receiveCourseProgress} />;
+  const acknowledgeDrop = (dropId: string) => {
+    commit((current) => acknowledgeRewardDrop(current, dropId));
+  };
+
+  const leaveCourseFor = (nextView: "shop" | "profile", dropId: string) => {
+    acknowledgeDrop(dropId);
+    setActiveCourse(null);
+    setView(nextView);
+  };
+
+  if (activeCourse) {
+    const rewardDrop = progress.pendingDrops.find(
+      (drop) => drop.courseId === activeCourse.id,
+    ) ?? null;
+
+    return (
+      <CoursePlayer
+        course={activeCourse}
+        locale={locale}
+        rewardDrop={rewardDrop}
+        onClose={() => setActiveCourse(null)}
+        onProgress={receiveCourseProgress}
+        onContinueReward={acknowledgeDrop}
+        onOpenShop={(dropId) => leaveCourseFor("shop", dropId)}
+        onOpenProfile={(dropId) => leaveCourseFor("profile", dropId)}
+      />
+    );
+  }
 
   return (
     <main className={`${styles.app} ${progress.equipped.theme ? styles.equippedTheme : ""}`} lang={locale === "zh" ? "zh-CN" : "en"}>

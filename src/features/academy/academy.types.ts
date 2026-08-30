@@ -58,8 +58,26 @@ export interface CourseRecord {
   readonly lastSyncedAt: string;
 }
 
+/**
+ * One unacknowledged settlement created from an increase in a course's
+ * cumulative progress snapshot. Assets are already committed when this record
+ * is created; acknowledging it only dismisses the learner-facing notification.
+ */
+export interface PendingRewardDrop {
+  readonly id: string;
+  readonly courseId: string;
+  readonly createdAt: string;
+  readonly newLessons: readonly number[];
+  readonly xpEarned: number;
+  readonly crystalsEarned: number;
+  readonly rewardIds: readonly string[];
+  readonly rankBefore: number;
+  readonly rankAfter: number;
+}
+
 export interface AcademyProgress {
   readonly courses: Readonly<Record<string, CourseRecord>>;
+  readonly pendingDrops: readonly PendingRewardDrop[];
   readonly crystals: number;
   readonly inventory: readonly string[];
   readonly equipped: Readonly<Partial<Record<ShopItemKind, string>>>;
